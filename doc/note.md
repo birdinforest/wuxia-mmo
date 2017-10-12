@@ -47,3 +47,11 @@ app.use('/client', express.static(__dirname + '/client'));
 server.listen(process.env.PORT || 2000);            // HERE. use correct port depending on nodejs running environment, or using custmised prot.
 console.log("Server started.");
 ```
+
+Push to heroku master:
+git add .
+git commit -am "init"
+git push keroku master
+
+Check log:
+heroku logs
