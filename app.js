@@ -1,3 +1,5 @@
+var map = require('./server/map');
+
 var Direction = {NONE:0, UP:1, DOWN:2, LEFT:3, RIGHT:4};
 var ShootVar = {NONE:'', SHOOT:'shoot', SHOOT_ANGLE:'angle'};
 
@@ -25,7 +27,7 @@ class Entity {
 }
 
 class Player extends Entity {
-    constructor(id, look, maxSpd) {
+    constructor(id, look, maxSpd, map) {
         super();
 
         this.id = id;
@@ -46,6 +48,8 @@ class Player extends Entity {
         this.hp = 10;
         this.hpMax = 10;
         this.score = 0;
+
+        this.map = map;
 
         // add new player into list.
         Player.list[id] = this;
@@ -119,6 +123,7 @@ class Player extends Entity {
             hp:this.hp,
             hpMax:this.hpMax,
             score:this.score,
+            map:this.map,
         };
     }
 
@@ -130,6 +135,7 @@ class Player extends Entity {
             hp:this.hp,
             hpMax:this.hpMax,
             score:this.score,
+            map:this.map,
         };
     }
 
@@ -149,12 +155,12 @@ class Player extends Entity {
     }
 
     // create new player.
-    static create(id, look, maxSpd) {
-        return new Player(id, look, maxSpd);
+    static create(id, look, maxSpd, map) {
+        return new Player(id, look, maxSpd, map);
     }
 
     static onConnection(socket, look, maxSpd) {
-        var player = Player.create(socket.id, look, maxSpd);
+        var player = Player.create(socket.id, look, maxSpd, map.manager.currMap);
 
         socket.on('keyPress', function(data) {
             player.updateAction(data.inputID, data.state);
@@ -361,6 +367,10 @@ var doSynToLatest = false;
 // var mongojs = require('mongojs');
 // var db = mongojs('localhost:27017/myGame', ['account','progress']);
 
+// v-8 profiler
+var profiler = require('v8-profiler');
+var fs = require('fs');
+
 // create server.
 var express = require('express');
 var app = express();
@@ -443,6 +453,11 @@ io.sockets.on('connection', function(socket){
         socket.emit('evalAnswer', res);
     });
 
+    // change map
+    socket.on('changeMap', function(data) {
+        Player.list[data.id].map = map.manager.changeMap();
+    });
+
     latestSocket = socket;
     doSynToLatest = true;
     console.log("latest socket: " + latestSocket.id);
@@ -521,3 +536,23 @@ var addUser = function(data, cb) {
     //     cb(err?false:true);
     // });
 };
+
+/**
+ * Sample profiler by given duration, and save it to file.
+ * @param {number} duration 
+ */
+var startProfiling = function(duration) {
+    profiler.startProfiling('01', true);
+    setTimeout(function(error, result) {
+        var profile01 = profiler.stopProfiling('01');
+
+        profile01.export(function(error, result) {
+            fs.writeFile('./profile01.cpuprofile', result, null);
+            profile01.delete();
+            console.log('Profile saved as "./profile01.cpuprofile"');
+        });
+    }, duration);
+};
+
+// sample profile.
+startProfiling(10000);

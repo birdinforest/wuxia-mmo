@@ -1,356 +1,413 @@
-<div id="signDiv">
-    Username: <input id="signDiv-username" type="text"></input><br>
-    Password: <input id="signDiv-password" type="password"></input>
-    <button id="signDiv-signIn">Sign In</button>
-    <button id="signDiv-signUp">Sign Up</button>
-</div>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Wuxia Sand Box</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!-- <link href="css/style.css" rel="stylesheet"> -->
+    </head>
 
-<div id="gameDiv" style="display:none;">
-    <canvas id="ctx" width="500" height="500" style="border:1px solid #000000;"></canvas>
+    <body>
+        <div id="gameDiv" style="display:none;">
+            <div id="game" style="display:true;">
+                <canvas id="ctx" width="500" height="500" style="position:absolute; left:8px; top:8px; border:1px solid #000000;"></canvas>
+                <canvas id="ctx-ui" width="500" height="500" style="position:absolute; left:8px; top:8px; border:1px solid #000000;"></canvas>
 
-    <div id="chat-text" style="width:500px;height:100px;overflow-y:scroll">
-        <div>Hello!</div>
-    </div>
+                <div id="ui" style="position:absolute; width:500px; height:500px;">
+                    <button onclick="changeMap()" style="position:absolute; bottom:0px; left:0px">
+                        Change Map
+                    </button>
+                </div>
+            </div>
 
-    <form id="chat-form">
-        <input id="chat-input" type="text" style="width:500px"></input>
-    </form>
-</div>
+            <div id="belowGame" style="margin-top:520px">
+                <div id="chat-text" style="width:500px; height:100px; overflow-y:scroll">
+                    <div>Hello!</div>
+                </div>
 
-<script src ="http://cdn.socket.io/socket.io-1.4.5.js"></script>
-<script>
-    class Entity {
-        constructor() {
-            this.id = '';
-            this.x = 250;
-            this.y = 250;
-            this.spdX = 0;
-            this.spdY = 0;
-        }
-    }
+                <form id="chat-form">
+                    <input id="chat-input" type="text" style="width:500px"></input>
+                </form>
+            </div>
+        </div>
 
-    class Player extends Entity {
-        constructor(id, look, x, y, hp, hpMax) {
-            super();
+        <script src = "/client/js/utility.js"></script>
+        <script src = "/client/socket.io.js"></script>
 
-            this.id = id;
-            this.look = look || "P";
-            this.x = x;
-            this.y = y;
-            this.hp = hp;
-            this.hpMax = hpMax;
-            this.score = 0;
+        <script>
+            // Create login page
+            var signDiv = createDiv('signDiv', 'true');
+            var signDivUsername = createInput('signDiv-username', 'text');
+            var signDivPassword = createInput('signDiv-password', 'password');
+            var signDivSignIn = createButton('signDiv-signIn', null, null, 'Sign In');
+            var signDivSignUp = createButton('signDiv-signUp', null, null, 'Sign Up');
+            document.body.appendChild(signDiv);
+                signDiv.appendChild(signDivUsername);
+                signDiv.appendChild(document.createElement("br"));
+                signDiv.appendChild(signDivPassword);
+                signDiv.appendChild(signDivSignIn);
+                signDiv.appendChild(signDivSignUp);
 
-            // add new player into list.
-            Player.list[id] = this;
-        }
-
-        draw() {
-            // pos on screen.
-            var x = this.x - Player.list[selfId].x + SCREEN_W/2;
-            var y = this.y - Player.list[selfId].y + SCREEN_H/2;
-
-            var hpWidth = 30 * this.hp / this.hpMax;
-            ctx.fillStyle = 'red';
-            ctx.fillRect(x - hpWidth/2, y - 40, hpWidth, 4);
-
-            var w = Img.player.width;
-            var h = Img.player.height;
-
-            ctx.drawImage(Img.player, 0, 0, 
-                          Img.player.width, Img.player.height, 
-                          x - w/2, y - h/2, w, h);
-
-            // ctx.fillText(this.score, this.x, this.y - 60);
-        }
-
-        static destroy(id) {
-            delete Player.list[id];
-        }
-
-        // create new player.
-        static create(id, look, x, y, hp, hpMax) {
-            if(Player.list[id])
-                return;
-            return new Player(id, look, x, y, hp, hpMax);
-        }
-    }
-    Player.list = {};       // A static list belongs to Player class.
-
-    class Bullet extends Entity {
-        constructor(parentId, id, x, y) {
-            super();
-
-            this.id = id;
-            this.parentId = parentId;
-            this.x = x;
-            this.y = y;
-
-            this.lifeTime = 0;
-
-            // add new bullet into list.
-            Bullet.list[this.id] = this;
-        }
-        
-        draw() {
-            var w = Img.player.width;
-            var h = Img.player.height;
-
-            // pos on screen.
-            var x = this.x - Player.list[selfId].x + SCREEN_W/2;
-            var y = this.y - Player.list[selfId].y + SCREEN_H/2;
-
-            ctx.drawImage(Img.bullet, 0, 0, 
-                          Img.bullet.width, Img.bullet.height, 
-                          x - w/2, y - h/2, w, h);
-        }
-
-        static destroy(id) {
-            delete Bullet.list[id];
-        }
-
-        // create new bullet.
-        static create(parentId, id, x, y) {
-            if(Bullet.list[id])
-                return;
-            return new Bullet(parentId, id, x, y);
-        }
-    }
-    Bullet.list = {};       // A static list belongs to Bullet class.
-
-    // screen
-    var SCREEN_W = 500; 
-    var SCREEN_H = 500; 
-
-    // enum
-    var Direction = {NONE:0, UP:1, DOWN:2, LEFT:3, RIGHT:4}
-    var ShootVar = {NONE:'', SHOOT:'shoot', SHOOT_ANGLE:'angle'}
-
-    // socket
-    var socket = io();
-
-    // sign elements
-    var signDiv = document.getElementById('signDiv');
-    var signDivUsername = document.getElementById('signDiv-username');
-    var signDivPassword = document.getElementById('signDiv-password');
-    var signDivSignIn = document.getElementById('signDiv-signIn');
-    var signDivSignUp = document.getElementById('signDiv-signUp');
-
-    // game and chat elements
-    var gameDiv = document.getElementById('gameDiv');
-    var chatText = document.getElementById('chat-text');
-    var chatInput = document.getElementById('chat-input');
-    var chatForm = document.getElementById('chat-form');
-
-    // sign functions
-    signDivSignIn.onclick = function() {
-        socket.emit('signIn', {
-            username:signDivUsername.value, 
-            password:signDivPassword.value});
-    }
-
-    signDivSignUp.onclick = function() {
-        socket.emit('signUp', {
-            username:signDivUsername.value, 
-            password:signDivPassword.value});
-    }
-
-    socket.on('signInResponse', function(data) {
-        if(data.success) {
-            signDiv.style.display = 'none';
-            gameDiv.style.display = 'inline-block';
-        } else {
-            alert('Sign in unccessful.');
-        }
-    });
-
-    socket.on('signUpResponse', function(data) {
-        if(data.success) {
-            alert('Sign up successful.');
-        } else {
-            alert('Sign up unsuccessful.');
-        }
-    });
-
-    // chat functions
-    // receive chat text form server
-    socket.on('addToChat', function(data) {
-        chatText.innerHTML += '<div>' + data + '</div>';
-    });
-
-    // receive server evaluation info.
-    socket.on('evalAnswer', function(data) {
-        console.log(data);
-    });
-
-    // send chat text to server
-    chatForm.onsubmit = function(e) {
-        e.preventDefault();             // prevent page refresh.
-
-        if(chatInput.value[0] === '/')
-            socket.emit('evalServer', chatInput.value.slice(1));  // server evaluation.
-        else
-            socket.emit('sendMsgToServer', chatInput.value);
-
-        chatInput.value = '';
-    }
-
-    // game: player and bullet
-    var Img = {
-        player:new Image(),
-        bullet:new Image(),
-        map:new Image()
-    };
-    Img.player.src = "/client/img/xiaoyao_walk_01.png";
-    Img.bullet.src = '/client/img/knife.png';
-    Img.map.src = '/client/img/map.png';
-
-    var selfId = null;
-
-    var ctx = document.getElementById("ctx").getContext("2d");
-    ctx.font = '30px Arial'
-
-    // client state: init, update, destroy.
-    socket.on('connectionInit', function(data) {
-        if(data.selfId !== undefined) {
-            selfId = data.selfId;
-        }
-    });
-
-    socket.on('init', function(data) {
-        for(var i = 0; i < data.player.length; i++) {
-            var p = data.player[i];
-            Player.create(p.id, p.look, p.x, p.y, p.hp, p.hpMax);
-        }
-
-        for(var i = 0; i < data.bullet.length; i++) {
-            var b = data.bullet[i];
-            Bullet.create(b.parentId, b.id, b.x, b.y);
-        }
-    });
-
-    socket.on('update', function(data) {
-        for(var i = 0; i < data.player.length; i++) {
-            var pack = data.player[i];
-            var p = Player.list[pack.id];
-            if(p) {
-                if(p.x !== undefined)
-                    p.x = pack.x;
-                if(p.y !== undefined)
-                    p.y = pack.y;
-                if(p.hp !== undefined)
-                    p.hp = pack.hp;
-                if(p.score !== undefined)
-                    p.score = pack.score;
+            class Entity {
+                constructor() {
+                    this.id = '';
+                    this.x = 250;
+                    this.y = 250;
+                    this.spdX = 0;
+                    this.spdY = 0;
+                }
             }
-        }
 
-        for(var i = 0; i < data.bullet.length; i++) {
-            var pack = data.bullet[i];
-            var b = Bullet.list[pack.id];
-            if(b) {
-                if(b.x !== undefined)
-                    b.x = pack.x;
-                if(b.y !== undefined)
-                    b.y = pack.y;
+            class Player extends Entity {
+                constructor(id, look, x, y, hp, hpMax, map) {
+                    super();
+
+                    this.id = id;
+                    this.look = look || "P";
+                    this.x = x;
+                    this.y = y;
+                    this.hp = hp;
+                    this.hpMax = hpMax;
+                    this.score = 0;
+                    this.map = map;
+
+                    // add new player into list.
+                    Player.list[id] = this;
+                }
+
+                draw() {
+                    // pos on screen.
+                    var x = this.x - Player.list[selfId].x + SCREEN_W/2;
+                    var y = this.y - Player.list[selfId].y + SCREEN_H/2;
+
+                    var hpWidth = 30 * this.hp / this.hpMax;
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(x - hpWidth/2, y - 40, hpWidth, 4);
+
+                    var w = Img.player.width;
+                    var h = Img.player.height;
+
+                    ctx.drawImage(Img.player, 0, 0, 
+                                Img.player.width, Img.player.height, 
+                                x - w/2, y - h/2, w, h);
+
+                    // ctx.fillText(this.score, this.x, this.y - 60);
+                }
+
+                static destroy(id) {
+                    delete Player.list[id];
+                }
+
+                // create new player.
+                static create(id, look, x, y, hp, hpMax, map) {
+                    if(Player.list[id])
+                        return;
+                    return new Player(id, look, x, y, hp, hpMax, map);
+                }
             }
-        }
-    });
+            Player.list = {};       // A static list belongs to Player class.
 
-    socket.on('destroy', function(data) {
-        for(var i = 0; i < data.player.length; i++) {
-            delete Player.list[data.player[i].id];
-        }
+            class Bullet extends Entity {
+                constructor(parentId, id, x, y) {
+                    super();
 
-        for(var i = 0; i < data.bullet.length; i++) {
-            delete Bullet.list[data.bullet[i].id];
-        }
-    });
+                    this.id = id;
+                    this.parentId = parentId;
+                    this.x = x;
+                    this.y = y;
 
-    socket.on('synchronize', function(data) {
-        for(var i = 0; i < data.player.length; i++) {
-            var p = data.player[i];
-            Player.create(p.id, p.look, p.x, p.y, p.hp, p.hpMax);
-        }
+                    this.lifeTime = 0;
 
-        for(var i = 0; i < data.bullet.length; i++) {
-            var b = data.bullet[i];
-            Bullet.create(b.parentId, b.id, b.x, b.y);
-        }
-    });
+                    // add new bullet into list.
+                    Bullet.list[this.id] = this;
+                }
+                
+                draw() {
+                    var w = Img.player.width;
+                    var h = Img.player.height;
 
-    setInterval(function() {
-        ctx.clearRect(0,0,500,500);
+                    // pos on screen.
+                    var x = this.x - Player.list[selfId].x + SCREEN_W/2;
+                    var y = this.y - Player.list[selfId].y + SCREEN_H/2;
 
-        // not connected.
-        if(!selfId) {
-            return;
-        }
+                    ctx.drawImage(Img.bullet, 0, 0, 
+                                Img.bullet.width, Img.bullet.height, 
+                                x - w/2, y - h/2, w, h);
+                }
 
-        drawMap();
-        drawScore();
-        for(var i in Player.list) {
-            var player = Player.list[i];
-            player.draw();
-        }
-        for(var i in Bullet.list) {
-            var bullet = Bullet.list[i];
-            bullet.draw();
-        }
-    }, 40);
+                static destroy(id) {
+                    delete Bullet.list[id];
+                }
 
-    var drawMap = function() {
-        // cult map depending on palyer's position.
-        var x = SCREEN_W/2 - Player.list[selfId].x;
-        var y = SCREEN_H/2 - Player.list[selfId].y;
-        ctx.drawImage(Img.map, x, y);
-    }
+                // create new bullet.
+                static create(parentId, id, x, y) {
+                    if(Bullet.list[id])
+                        return;
+                    return new Bullet(parentId, id, x, y);
+                }
+            }
+            Bullet.list = {};       // A static list belongs to Bullet class.
+                
+            // screen
+            var SCREEN_W = 500; 
+            var SCREEN_H = 500; 
 
-    var drawScore = function() {
-        ctx.fillStyle = 'white';
-        ctx.fillText(Player.list[selfId].score, 0, 30)
-    }
+            // enum
+            var Direction = {NONE:0, UP:1, DOWN:2, LEFT:3, RIGHT:4}
+            var ShootVar = {NONE:'', SHOOT:'shoot', SHOOT_ANGLE:'angle'}
+            var MapName = {
+                Outside: 0,
+                Inside: 1,
+            }
 
-    document.onkeydown = function(event) {
-        emitKeyEvent(event, 'keyPress', true)
-    }
+            // socket
+            var socket = io();
 
-    document.onkeyup = function(event) {
-        emitKeyEvent(event, 'keyRelease', false)
-    }
+            // game and chat elements
+            var gameDiv = document.getElementById('gameDiv');
+            var chatText = document.getElementById('chat-text');
+            var chatInput = document.getElementById('chat-input');
+            var chatForm = document.getElementById('chat-form');
 
-    document.onmousedown = function(event) {
-        emitMouseEvent('mouseEvent',ShootVar.SHOOT, true)
-    }
+            // sign functions
+            signDivSignIn.onclick = function() {
+                socket.emit('signIn', {
+                    username:signDivUsername.value, 
+                    password:signDivPassword.value});
+            }
 
-    document.onmouseup = function(event) {
-        emitMouseEvent('mouseEvent',ShootVar.SHOOT, false)
-    }
+            signDivSignUp.onclick = function() {
+                socket.emit('signUp', {
+                    username:signDivUsername.value, 
+                    password:signDivPassword.value});
+            }
 
-    document.onmousemove = function(event) {
-        var x = -250 + event.clientX - 8;
-        var y = -250 + event.clientY - 8;
-        var angle = Math.atan2(y,x) / Math.PI * 180;
-        socket.emit('mouseEvent', {inputID:ShootVar.SHOOT_ANGLE, state:angle});
-    }
+            socket.on('signInResponse', function(data) {
+                if(data.success) {
+                    signDiv.style.display = 'none';
+                    gameDiv.style.display = 'inline-block';
+                } else {
+                    alert('Sign in unccessful.');
+                }
+            });
 
-    function emitKeyEvent (event, status, isPressed) {
-        if(event.keyCode === 68)             // d
-            socket.emit(status, {inputID:Direction.RIGHT, state:isPressed});
-        else if(event.keyCode === 83)        // s
-            socket.emit(status, {inputID:Direction.DOWN, state:isPressed});
-        else if(event.keyCode === 65)        // a
-            socket.emit(status, {inputID:Direction.LEFT, state:isPressed});
-        else if(event.keyCode === 87)        // w
-            socket.emit(status, {inputID:Direction.UP, state:isPressed});
-        else if(event.keyCode === 32)        // spacce
-            socket.emit(status, {inputID:ShootVar.SHOOT, state:isPressed});
-    }
+            socket.on('signUpResponse', function(data) {
+                if(data.success) {
+                    alert('Sign up successful.');
+                } else {
+                    alert('Sign up unsuccessful.');
+                }
+            });
 
-    function emitMouseEvent(evtName, inputIdVar, stateVar) {
-        socket.emit(evtName, {inputID:inputIdVar, state:stateVar});
-    }
+            // chat functions
+            // receive chat text form server
+            socket.on('addToChat', function(data) {
+                chatText.innerHTML += '<div>' + data + '</div>';
+            });
 
-</script>
+            // receive server evaluation info.
+            socket.on('evalAnswer', function(data) {
+                console.log(data);
+            });
 
-<!-- <button onclick="happy()">Happy</button> -->
+            // send chat text to server
+            chatForm.onsubmit = function(e) {
+                e.preventDefault();             // prevent page refresh.
+
+                if(chatInput.value[0] === '/')
+                    socket.emit('evalServer', chatInput.value.slice(1));  // server evaluation.
+                else
+                    socket.emit('sendMsgToServer', chatInput.value);
+
+                chatInput.value = '';
+            }
+
+            // game: player and bullet
+            var Img = {
+                player:new Image(),
+                bullet:new Image(),
+                map: {},
+                addMap: function(key, src) {
+                    let img = new Image();
+                    img.src = src;
+                    this.map[key] = img;
+                }
+                // map: new Image(),
+                // mapRoom: new Image(),
+            };
+
+            Img.player.src = "/client/img/xiaoyao_walk_01.png";
+            Img.bullet.src = '/client/img/knife.png';
+            // Img.map.src = '/client/img/map.png';
+            // Img.mapRoom.src = '/client/img/map02.png';
+            Img.addMap(MapName.Inside, '/client/img/map.png');
+            Img.addMap(MapName.Outside, '/client/img/map02.png');
+
+            var selfId = null;
+
+            var ctx = document.getElementById("ctx").getContext("2d");
+            var ctxUI = document.getElementById("ctx-ui").getContext("2d");
+            ctx.font = '30px Arial'
+            ctxUI.font = '30px Arial'
+
+            // client state: init, update, destroy.
+            socket.on('connectionInit', function(data) {
+                if(data.selfId !== undefined) {
+                    selfId = data.selfId;
+                }
+            });
+
+            socket.on('init', function(data) {
+                for(var i = 0; i < data.player.length; i++) {
+                    var p = data.player[i];
+                    Player.create(p.id, p.look, p.x, p.y, p.hp, p.hpMax, p.map);
+                }
+
+                for(var i = 0; i < data.bullet.length; i++) {
+                    var b = data.bullet[i];
+                    Bullet.create(b.parentId, b.id, b.x, b.y);
+                }
+            });
+
+            socket.on('update', function(data) {
+                for(var i = 0; i < data.player.length; i++) {
+                    var pack = data.player[i];
+                    var p = Player.list[pack.id];
+                    if(p) {
+                        if(pack.x !== undefined)
+                            p.x = pack.x;
+                        if(pack.y !== undefined)
+                            p.y = pack.y;
+                        if(pack.hp !== undefined)
+                            data.hp = pack.hp;
+                        if(pack.score !== undefined)
+                            p.score = pack.score;
+                        if(pack.map !== undefined) {
+                            p.map = pack.map;
+                        }
+                    }
+                }
+
+                for(var i = 0; i < data.bullet.length; i++) {
+                    var pack = data.bullet[i];
+                    var b = Bullet.list[pack.id];
+                    if(b) {
+                        if(pack.x !== undefined)
+                            b.x = pack.x;
+                        if(pack.y !== undefined)
+                            b.y = pack.y;
+                    }
+                }
+            });
+
+            socket.on('destroy', function(data) {
+                for(var i = 0; i < data.player.length; i++) {
+                    delete Player.list[data.player[i].id];
+                }
+
+                for(var i = 0; i < data.bullet.length; i++) {
+                    delete Bullet.list[data.bullet[i].id];
+                }
+            });
+
+            socket.on('synchronize', function(data) {
+                for(var i = 0; i < data.player.length; i++) {
+                    var p = data.player[i];
+                    Player.create(p.id, p.look, p.x, p.y, p.hp, p.hpMax, p.map);
+                }
+
+                for(var i = 0; i < data.bullet.length; i++) {
+                    var b = data.bullet[i];
+                    Bullet.create(b.parentId, b.id, b.x, b.y);
+                }
+            });
+
+            setInterval(function() {
+                ctx.clearRect(0,0,500,500);
+
+                // not connected.
+                if(!selfId) {
+                    return;
+                }
+
+                drawMap();
+                drawScore();
+                for(var i in Player.list) {
+                    var player = Player.list[i];
+                    player.draw();
+                }
+                for(var i in Bullet.list) {
+                    var bullet = Bullet.list[i];
+                    bullet.draw();
+                }
+            }, 40);
+
+            var drawMap = function() {
+                // cult map depending on palyer's position.
+                var x = SCREEN_W/2 - Player.list[selfId].x;
+                var y = SCREEN_H/2 - Player.list[selfId].y;
+                ctx.drawImage(Img.map[Player.list[selfId].map], x, y);
+                // ctx.drawImage(Img.map, x, y);
+            }
+
+            var lastScore = -1;
+            var drawScore = function() {
+                if(lastScore === Player.list[selfId].score) {
+                    return;
+                } else {
+                    ctxUI.clearRect(0, 0, 500, 500)
+                    ctxUI.fillStyle = 'white';
+                    ctxUI.fillText(Player.list[selfId].score, 0, 30)
+                    lastScore = Player.list[selfId].score;
+                }
+            }
+
+            document.onkeydown = function(event) {
+                emitKeyEvent(event, 'keyPress', true)
+            }
+
+            document.onkeyup = function(event) {
+                emitKeyEvent(event, 'keyRelease', false)
+            }
+
+            document.onmousedown = function(event) {
+                emitMouseEvent('mouseEvent',ShootVar.SHOOT, true)
+            }
+
+            document.onmouseup = function(event) {
+                emitMouseEvent('mouseEvent',ShootVar.SHOOT, false)
+            }
+
+            document.onmousemove = function(event) {
+                var x = -250 + event.clientX - 8;
+                var y = -250 + event.clientY - 8;
+                var angle = Math.atan2(y,x) / Math.PI * 180;
+                socket.emit('mouseEvent', {inputID:ShootVar.SHOOT_ANGLE, state:angle});
+            }
+
+            function emitKeyEvent (event, status, isPressed) {
+                if(event.keyCode === 68)             // d
+                    socket.emit(status, {inputID:Direction.RIGHT, state:isPressed});
+                else if(event.keyCode === 83)        // s
+                    socket.emit(status, {inputID:Direction.DOWN, state:isPressed});
+                else if(event.keyCode === 65)        // a
+                    socket.emit(status, {inputID:Direction.LEFT, state:isPressed});
+                else if(event.keyCode === 87)        // w
+                    socket.emit(status, {inputID:Direction.UP, state:isPressed});
+                else if(event.keyCode === 32)        // spacce
+                    socket.emit(status, {inputID:ShootVar.SHOOT, state:isPressed});
+            }
+
+            function emitMouseEvent(evtName, inputIdVar, stateVar) {
+                socket.emit(evtName, {inputID:inputIdVar, state:stateVar});
+            }
+
+            //=============================================
+            // UI
+            //=============================================
+            function changeMap() {
+                socket.emit('changeMap', {id:selfId});
+            }
+        </script>
+    </body>
+</html>

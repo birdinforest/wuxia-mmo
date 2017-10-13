@@ -5,7 +5,8 @@
   "main": "app.js",
   "dependencies": {
     "express": "^4.16.1",
-    "socket.io": "^2.0.3"
+    "socket.io": "^2.0.3",
+    "v8-profiler": "^5.7.0"
   },
   "engines": {
     "node": "6.11.3"

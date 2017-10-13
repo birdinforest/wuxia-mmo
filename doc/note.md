@@ -1,4 +1,4 @@
-# Heroku
+# Deploy on Heroku
 Login to heroku in terminal:
 heroku login
 
@@ -12,7 +12,8 @@ Ensure set dependencies, engeins, and start script in package.json:
 // tsconfig.json
 "dependencies":{
     "express": "^4.13.4",
-    "socket.io": "^1.4.5"
+    "socket.io": "^1.4.5",
+    "v8-profiler": "^5.7.0"
 },
 "engines": {
 "node": "6.11.3"
@@ -55,3 +56,40 @@ git push keroku master
 
 Check log:
 heroku logs
+heroku logs --tail  // streaming log
+
+# Profiler
+## Client
+Develop Tools -> Performance
+Cpu profiler: Develop Tools -> Custmise and control DevTools -> More tools -> javascript Profiler
+## Server
+Install v8-profiler:
+npm install v8-profiler
+
+Sample profiler on server by code:
+```js
+
+// app.js
+var profiler = require('v8-profiler');
+var fs = require('fs');
+
+/**
+ * Sample profiler by given duration, and save it to file.
+ * @param {number} duration 
+ */
+var startProfiling = function(duration) {
+    profiler.startProfiling('01', true);
+    setTimeout(function(error, result) {
+        var profile01 = profiler.stopProfiling('01');
+
+        profile01.export(function(error, result) {
+            fs.writeFile('./profile01.cpuprofile', result, null);
+            profile01.delete();
+            console.log('Profile saved as "./profile01.cpuprofile"');
+        });
+    }, duration);
+};
+
+// sample profile.
+startProfiling(10000);
+```
