@@ -12,7 +12,10 @@
                 "type": "node",
                 "request": "launch",
                 "name": "h5_multiplayer_swb",
-                "program": "${workspaceRoot}\\app.js"
+                "program": "${workspaceRoot}\\app.js",
+                "osx": {
+                    "program": "${workspaceRoot}\/app.js"
+                }
             },
             {
                 "type": "chrome",
